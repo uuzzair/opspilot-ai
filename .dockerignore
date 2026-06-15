@@ -1,0 +1,14 @@
+.git
+.pytest_cache
+__pycache__
+*.py[cod]
+.env
+.env.local
+.env.*.local
+venv
+env
+build
+dist
+*.egg-info
+test.db
+README.md
