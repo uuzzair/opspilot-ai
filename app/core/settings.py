@@ -20,11 +20,11 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # Database
-    database_url: str = "postgresql://opspilot:opspilot@localhost:5432/opspilot_db"
+    database_url: str
     database_echo: bool = False
 
     # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str
 
     # LLM (future support for OpenAI and Ollama)
     openai_api_key: str | None = None

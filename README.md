@@ -157,8 +157,6 @@ Key environment variables (see `.env.example`):
 
 ### Health Checks
 - `GET /health` - Basic health check
-- `GET /health/live` - Liveness probe (Kubernetes ready)
-- `GET /health/ready` - Readiness probe (Kubernetes ready)
 
 ### API Documentation
 - `GET /docs` - Swagger UI

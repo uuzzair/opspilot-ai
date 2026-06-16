@@ -20,15 +20,3 @@ async def health_check() -> HealthResponse:
     """Health check endpoint."""
     logger.info("Health check called")
     return HealthResponse(status="healthy")
-
-
-@router.get("/live")
-async def liveness() -> HealthResponse:
-    """Liveness probe for Kubernetes."""
-    return HealthResponse(status="healthy")
-
-
-@router.get("/ready")
-async def readiness() -> HealthResponse:
-    """Readiness probe for Kubernetes."""
-    return HealthResponse(status="healthy")
