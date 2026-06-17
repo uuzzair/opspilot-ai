@@ -1,8 +1,9 @@
 """Database models."""
 from datetime import datetime
+from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Integer
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, JSON, String, Text, Uuid
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -13,7 +14,11 @@ class BaseModel(Base):
 
     __abstract__ = True
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -25,3 +30,138 @@ class BaseModel(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class User(BaseModel):
+    """Application user."""
+
+    __tablename__ = "users"
+
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role: Mapped[str] = mapped_column(
+        String(50),
+        default="engineer",
+        server_default="engineer",
+        nullable=False,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default="true",
+        nullable=False,
+    )
+
+    created_incidents: Mapped[list["Incident"]] = relationship(
+        foreign_keys="Incident.created_by_id",
+        back_populates="created_by",
+    )
+    assigned_incidents: Mapped[list["Incident"]] = relationship(
+        foreign_keys="Incident.assigned_to_id",
+        back_populates="assigned_to",
+    )
+
+
+class Incident(BaseModel):
+    """Incident submitted for triage."""
+
+    __tablename__ = "incidents"
+
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(50),
+        default="manual",
+        server_default="manual",
+        nullable=False,
+    )
+    severity: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(30),
+        default="open",
+        server_default="open",
+        nullable=False,
+    )
+    affected_service: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+    assigned_to_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    created_by: Mapped[User | None] = relationship(
+        foreign_keys=[created_by_id],
+        back_populates="created_incidents",
+    )
+    assigned_to: Mapped[User | None] = relationship(
+        foreign_keys=[assigned_to_id],
+        back_populates="assigned_incidents",
+    )
+    triage_results: Mapped[list["TriageResult"]] = relationship(
+        back_populates="incident",
+        cascade="all, delete-orphan",
+    )
+
+
+class TriageResult(BaseModel):
+    """AI triage result for an incident."""
+
+    __tablename__ = "triage_results"
+
+    incident_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("incidents.id"),
+        nullable=False,
+    )
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    suspected_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recommended_actions: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    approval_status: Mapped[str] = mapped_column(
+        String(30),
+        default="pending",
+        server_default="pending",
+        nullable=False,
+    )
+    approved_by_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    incident: Mapped[Incident] = relationship(back_populates="triage_results")
+    approved_by: Mapped[User | None] = relationship()
+
+
+class AuditLog(Base):
+    """Audit log entry."""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    actor_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+    entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    actor: Mapped[User | None] = relationship()

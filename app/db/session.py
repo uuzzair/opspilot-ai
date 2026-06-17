@@ -1,4 +1,6 @@
 """Database session and base setup."""
+from collections.abc import Iterator
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -20,7 +22,7 @@ class Base(DeclarativeBase):
     """Base class for SQLAlchemy models."""
 
 
-def get_db() -> Session:
+def get_db() -> Iterator[Session]:
     """Get database session dependency for FastAPI."""
     db = SessionLocal()
     try:
