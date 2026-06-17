@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str
 
+    # JWT
+    jwt_secret_key: str
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+
     # LLM (future support for OpenAI and Ollama)
     openai_api_key: str | None = None
     openai_model: str = "gpt-4"

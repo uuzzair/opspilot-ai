@@ -8,9 +8,13 @@ from app.db.models import Incident
 from app.schemas.incident import IncidentCreate, IncidentUpdate
 
 
-def create_incident(db: Session, incident_in: IncidentCreate) -> Incident:
+def create_incident(
+    db: Session,
+    incident_in: IncidentCreate,
+    created_by_id: UUID,
+) -> Incident:
     """Create an incident."""
-    incident = Incident(**incident_in.model_dump())
+    incident = Incident(**incident_in.model_dump(), created_by_id=created_by_id)
     db.add(incident)
     db.commit()
     db.refresh(incident)

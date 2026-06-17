@@ -19,7 +19,6 @@ class IncidentCreate(BaseModel):
     severity: IncidentSeverity | None = None
     status: IncidentStatus = "open"
     affected_service: str | None = Field(default=None, max_length=255)
-    created_by_id: UUID | None = None
     assigned_to_id: UUID | None = None
 
 

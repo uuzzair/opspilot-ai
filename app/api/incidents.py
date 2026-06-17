@@ -4,7 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.db.models import Incident
+from app.api.deps import get_current_user
+from app.db.models import Incident, User
 from app.db.session import get_db
 from app.schemas.incident import IncidentCreate, IncidentRead, IncidentUpdate
 from app.services import incident_service
@@ -16,9 +17,10 @@ router = APIRouter(prefix="/incidents", tags=["incidents"])
 def create_incident(
     incident_in: IncidentCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Incident:
     """Create an incident."""
-    return incident_service.create_incident(db, incident_in)
+    return incident_service.create_incident(db, incident_in, current_user.id)
 
 
 @router.get("", response_model=list[IncidentRead])
@@ -44,6 +46,7 @@ def update_incident(
     incident_id: UUID,
     incident_in: IncidentUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Incident:
     """Update an incident."""
     incident = incident_service.get_incident(db, incident_id)
