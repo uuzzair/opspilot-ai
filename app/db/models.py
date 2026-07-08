@@ -61,6 +61,9 @@ class User(BaseModel):
         foreign_keys="Incident.assigned_to_id",
         back_populates="assigned_to",
     )
+    created_runbooks: Mapped[list["Runbook"]] = relationship(
+        back_populates="created_by",
+    )
 
 
 class Incident(BaseModel):
@@ -166,3 +169,41 @@ class AuditLog(Base):
     )
 
     actor: Mapped[User | None] = relationship()
+
+
+class Runbook(BaseModel):
+    """Operational runbook."""
+
+    __tablename__ = "runbooks"
+
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    service_name: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    created_by: Mapped[User | None] = relationship(back_populates="created_runbooks")
+    chunks: Mapped[list["RunbookChunk"]] = relationship(
+        back_populates="runbook",
+        cascade="all, delete-orphan",
+    )
+
+
+class RunbookChunk(BaseModel):
+    """Chunk of runbook content."""
+
+    __tablename__ = "runbook_chunks"
+
+    runbook_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("runbooks.id"),
+        nullable=False,
+    )
+    chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    chunk_index: Mapped[int] = mapped_column(nullable=False)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+
+    runbook: Mapped[Runbook] = relationship(back_populates="chunks")
