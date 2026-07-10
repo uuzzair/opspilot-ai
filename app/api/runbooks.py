@@ -10,8 +10,10 @@ from app.db.session import get_db
 from app.schemas.runbook import (
     RunbookChunkCreate,
     RunbookChunkRead,
+    RunbookChunkSearchResult,
     RunbookCreate,
     RunbookRead,
+    RunbookSearchRequest,
     RunbookUpdate,
 )
 from app.services import runbook_service
@@ -33,6 +35,15 @@ def create_runbook(
 def list_runbooks(db: Session = Depends(get_db)) -> list[Runbook]:
     """List runbooks."""
     return runbook_service.list_runbooks(db)
+
+
+@router.post("/search", response_model=list[RunbookChunkSearchResult])
+def search_runbooks(
+    search_in: RunbookSearchRequest,
+    db: Session = Depends(get_db),
+) -> list[RunbookChunkSearchResult]:
+    """Search runbook chunks."""
+    return runbook_service.search_runbook_chunks(db, search_in)
 
 
 @router.get("/{runbook_id}", response_model=RunbookRead)

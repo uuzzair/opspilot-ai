@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
+from app.db.types import EmbeddingVector
 
 
 class BaseModel(Base):
@@ -205,5 +206,9 @@ class RunbookChunk(BaseModel):
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
     chunk_index: Mapped[int] = mapped_column(nullable=False)
     metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        EmbeddingVector(384),
+        nullable=True,
+    )
 
     runbook: Mapped[Runbook] = relationship(back_populates="chunks")

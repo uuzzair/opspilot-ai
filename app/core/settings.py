@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama2"
 
+    embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+
     # Use Ollama by default, switch to OpenAI when available.
     use_local_llm: bool = True
 

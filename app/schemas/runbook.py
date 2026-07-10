@@ -56,3 +56,22 @@ class RunbookChunkRead(BaseModel):
     metadata: dict[str, Any] = Field(validation_alias="metadata_")
     created_at: datetime
     updated_at: datetime
+
+
+class RunbookSearchRequest(BaseModel):
+    """Request body for searching runbook chunks."""
+
+    query: str = Field(min_length=1)
+    service_name: str | None = Field(default=None, min_length=1, max_length=255)
+    top_k: int = Field(default=5, ge=1, le=10)
+
+
+class RunbookChunkSearchResult(BaseModel):
+    """Search result for a matching runbook chunk."""
+
+    runbook_id: UUID
+    chunk_id: UUID
+    chunk_text: str
+    chunk_index: int
+    service_name: str
+    distance: float

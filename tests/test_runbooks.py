@@ -1,10 +1,31 @@
 """Tests for runbook endpoints."""
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.services import runbook_service
 
 RUNBOOKS_URL = "/api/runbooks"
 AUTH_URL = "/api/auth"
+
+
+class FakeEmbeddingService:
+    """Deterministic embeddings for tests."""
+
+    def embed_text(self, text: str) -> list[float]:
+        lowered = text.lower()
+        if "latency" in lowered:
+            return [1.0, 0.0, 0.0]
+        if "restart" in lowered:
+            return [0.0, 1.0, 0.0]
+        return [0.0, 0.0, 1.0]
+
+
+@pytest.fixture(autouse=True)
+def fake_embedding_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid loading sentence-transformers during tests."""
+    monkeypatch.setattr(runbook_service, "embedding_service", FakeEmbeddingService())
 
 
 def auth_headers(client: TestClient, email: str = "runbooker@example.com") -> tuple[dict[str, str], str]:
@@ -195,3 +216,77 @@ def test_list_chunks_missing_runbook_returns_404(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Runbook not found"
+
+
+def test_search_runbook_chunks(client: TestClient) -> None:
+    """Search runbook chunks by semantic similarity."""
+    runbook = create_runbook(client)
+    headers, _ = auth_headers(client, "searcher@example.com")
+    client.post(
+        f"{RUNBOOKS_URL}/{runbook['id']}/chunks",
+        headers=headers,
+        json={"chunk_text": "Investigate latency spikes.", "chunk_index": 0},
+    )
+    client.post(
+        f"{RUNBOOKS_URL}/{runbook['id']}/chunks",
+        headers=headers,
+        json={"chunk_text": "Restart the API service.", "chunk_index": 1},
+    )
+
+    response = client.post(
+        f"{RUNBOOKS_URL}/search",
+        json={"query": "latency is high", "top_k": 1},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["runbook_id"] == runbook["id"]
+    assert data[0]["chunk_text"] == "Investigate latency spikes."
+    assert data[0]["service_name"] == "checkout-api"
+    assert data[0]["distance"] == 0.0
+    assert "score" not in data[0]
+
+
+def test_search_runbook_chunks_filters_by_service(client: TestClient) -> None:
+    """Search can filter chunks by service name."""
+    checkout_runbook = create_runbook(client, "checkout-search@example.com")
+    headers, _ = auth_headers(client, "payments-search@example.com")
+    payments_response = client.post(
+        RUNBOOKS_URL,
+        headers=headers,
+        json={"title": "Payments latency", "service_name": "payments-api"},
+    )
+    payments_runbook = payments_response.json()
+
+    client.post(
+        f"{RUNBOOKS_URL}/{checkout_runbook['id']}/chunks",
+        headers=headers,
+        json={"chunk_text": "Investigate latency in checkout.", "chunk_index": 0},
+    )
+    client.post(
+        f"{RUNBOOKS_URL}/{payments_runbook['id']}/chunks",
+        headers=headers,
+        json={"chunk_text": "Investigate latency in payments.", "chunk_index": 0},
+    )
+
+    response = client.post(
+        f"{RUNBOOKS_URL}/search",
+        json={"query": "latency", "service_name": "payments-api", "top_k": 5},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["runbook_id"] == payments_runbook["id"]
+    assert data[0]["service_name"] == "payments-api"
+
+
+def test_search_runbook_chunks_validates_payload(client: TestClient) -> None:
+    """Validate search query and top_k."""
+    response = client.post(
+        f"{RUNBOOKS_URL}/search",
+        json={"query": "", "top_k": 11},
+    )
+
+    assert response.status_code == 422
