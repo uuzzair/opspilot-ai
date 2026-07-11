@@ -4,54 +4,32 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai.triage_graph import FALLBACK_ACTIONS, classify_severity_from_text, run_triage_graph
+from app.ai.triage_state import RetrievedChunk, TriageState
 from app.db.models import Incident, TriageResult
 from app.schemas.runbook import RunbookSearchRequest
 from app.schemas.triage import TriageReviewRequest
 from app.services import runbook_service
-
-FALLBACK_ACTIONS = [
-    "Check recent deployments",
-    "Review application logs",
-    "Check database and external dependency health",
-    "Escalate if customer impact is high",
-]
-
-SEVERITY_KEYWORDS = {
-    "critical": ["outage", "down", "unavailable", "data loss", "payment failure"],
-    "high": ["high latency", "p95", "error rate", "database cpu", "queue backlog"],
-    "medium": ["degraded", "intermittent", "timeout"],
-}
 
 APPROVED_STATUS = "approved"
 REJECTED_STATUS = "rejected"
 
 
 def create_triage_result(db: Session, incident: Incident) -> TriageResult:
-    """Create a deterministic triage result for an incident."""
-    query = build_incident_query(incident)
-    severity = classify_severity(query)
-    chunks = runbook_service.search_runbook_chunks(
-        db,
-        RunbookSearchRequest(
-            query=query,
-            service_name=incident.affected_service,
-            top_k=5,
-        ),
+    """Create a LangGraph-orchestrated deterministic triage result."""
+    graph_output = run_triage_graph(
+        build_initial_triage_state(incident),
+        lambda state: retrieve_runbook_chunks(db, state),
     )
-    recommended_actions = [
-        chunk.chunk_text.strip()
-        for chunk in chunks
-        if chunk.chunk_text.strip()
-    ] or FALLBACK_ACTIONS
-
+    severity = graph_output["severity"]
     incident.severity = severity
     triage_result = TriageResult(
         incident_id=incident.id,
-        summary=build_summary(incident, severity),
-        suspected_cause=build_suspected_cause(severity, chunks_found=bool(chunks)),
-        recommended_actions=recommended_actions,
-        confidence_score=0.75 if chunks else 0.45,
-        model_name="deterministic-v1",
+        summary=graph_output["summary"],
+        suspected_cause=graph_output["suspected_cause"],
+        recommended_actions=graph_output["recommended_actions"],
+        confidence_score=graph_output["confidence_score"],
+        model_name="langgraph-deterministic-v1",
     )
     db.add(incident)
     db.add(triage_result)
@@ -59,6 +37,39 @@ def create_triage_result(db: Session, incident: Incident) -> TriageResult:
     db.refresh(triage_result)
     db.refresh(incident)
     return triage_result
+
+
+def build_initial_triage_state(incident: Incident) -> TriageState:
+    """Build graph input state from an incident."""
+    return {
+        "incident_id": incident.id,
+        "title": incident.title,
+        "description": incident.description,
+        "affected_service": incident.affected_service,
+    }
+
+
+def retrieve_runbook_chunks(db: Session, state: TriageState) -> list[RetrievedChunk]:
+    """Retrieve top 5 runbook chunks for graph state."""
+    chunks = runbook_service.search_runbook_chunks(
+        db,
+        RunbookSearchRequest(
+            query=state["query"],
+            service_name=state.get("affected_service"),
+            top_k=5,
+        ),
+    )
+    return [
+        {
+            "runbook_id": chunk.runbook_id,
+            "chunk_id": chunk.chunk_id,
+            "chunk_text": chunk.chunk_text,
+            "chunk_index": chunk.chunk_index,
+            "service_name": chunk.service_name,
+            "distance": chunk.distance,
+        }
+        for chunk in chunks
+    ]
 
 
 def list_triage_results(db: Session, incident_id: UUID) -> list[TriageResult]:
@@ -135,11 +146,7 @@ def build_incident_query(incident: Incident) -> str:
 
 def classify_severity(text: str) -> str:
     """Classify severity using deterministic keyword rules."""
-    normalized = text.lower()
-    for severity, keywords in SEVERITY_KEYWORDS.items():
-        if any(keyword in normalized for keyword in keywords):
-            return severity
-    return "low"
+    return classify_severity_from_text(text)
 
 
 def build_summary(incident: Incident, severity: str) -> str:

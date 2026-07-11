@@ -50,8 +50,22 @@ def create_incident(
 def fake_retrieval(monkeypatch: pytest.MonkeyPatch) -> list[SimpleNamespace]:
     """Mock runbook retrieval for deterministic triage tests."""
     chunks = [
-        SimpleNamespace(chunk_text="Check p95 latency dashboard."),
-        SimpleNamespace(chunk_text="Review upstream dependency health."),
+        SimpleNamespace(
+            runbook_id=uuid4(),
+            chunk_id=uuid4(),
+            chunk_text="Check p95 latency dashboard.",
+            chunk_index=0,
+            service_name="payments-api",
+            distance=0.1,
+        ),
+        SimpleNamespace(
+            runbook_id=uuid4(),
+            chunk_id=uuid4(),
+            chunk_text="Review upstream dependency health.",
+            chunk_index=1,
+            service_name="payments-api",
+            distance=0.2,
+        ),
     ]
 
     def search_runbook_chunks(db, search_in):
@@ -102,7 +116,7 @@ def test_create_triage_with_runbook_context(client: TestClient, fake_retrieval) 
         "Review upstream dependency health.",
     ]
     assert data["confidence_score"] == 0.75
-    assert data["model_name"] == "deterministic-v1"
+    assert data["model_name"] == "langgraph-deterministic-v1"
     assert data["approval_status"] == "pending"
 
     incident_response = client.get(f"{INCIDENTS_URL}/{incident['id']}")
