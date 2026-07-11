@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api import incidents as incidents_api
-from app.db.models import Incident, TriageJob, TriageResult
+from app.db.models import AuditLog, Incident, TriageJob, TriageResult
 from app.services import triage_job_service
 from app.workers import tasks
 
@@ -158,6 +158,13 @@ def test_worker_task_updates_job_to_succeeded(
     assert updated_job.status == "succeeded"
     assert str(updated_job.triage_result_id) == triage_result_id
     assert updated_job.error_message is None
+    audit_log = (
+        db.query(AuditLog)
+        .filter_by(entity_type="triage_job", entity_id=str(job.id), action="succeeded")
+        .one()
+    )
+    assert audit_log.actor_id is None
+    assert audit_log.details["triage_result_id"] == triage_result_id
 
 
 def test_worker_task_updates_job_to_failed(
@@ -190,3 +197,10 @@ def test_worker_task_updates_job_to_failed(
     assert updated_job is not None
     assert updated_job.status == "failed"
     assert updated_job.error_message == "triage exploded"
+    audit_log = (
+        db.query(AuditLog)
+        .filter_by(entity_type="triage_job", entity_id=str(job.id), action="failed")
+        .one()
+    )
+    assert audit_log.actor_id is None
+    assert audit_log.details["error_type"] == "RuntimeError"

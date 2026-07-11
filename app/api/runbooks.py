@@ -16,6 +16,7 @@ from app.schemas.runbook import (
     RunbookSearchRequest,
     RunbookUpdate,
 )
+from app.services import audit_log_service
 from app.services import runbook_service
 
 router = APIRouter(prefix="/runbooks", tags=["runbooks"])
@@ -28,7 +29,19 @@ def create_runbook(
     current_user: User = Depends(get_current_user),
 ) -> Runbook:
     """Create a runbook."""
-    return runbook_service.create_runbook(db, runbook_in, current_user.id)
+    runbook = runbook_service.create_runbook(db, runbook_in, current_user.id)
+    audit_log_service.safe_create_audit_log(
+        db,
+        entity_type="runbook",
+        entity_id=runbook.id,
+        action="created",
+        actor_id=current_user.id,
+        details={
+            "title": runbook.title,
+            "service_name": runbook.service_name,
+        },
+    )
+    return runbook
 
 
 @router.get("", response_model=list[RunbookRead])
@@ -69,7 +82,20 @@ def update_runbook(
     runbook = runbook_service.get_runbook(db, runbook_id)
     if runbook is None:
         raise HTTPException(status_code=404, detail="Runbook not found")
-    return runbook_service.update_runbook(db, runbook, runbook_in)
+    updated_runbook = runbook_service.update_runbook(db, runbook, runbook_in)
+    audit_log_service.safe_create_audit_log(
+        db,
+        entity_type="runbook",
+        entity_id=updated_runbook.id,
+        action="updated",
+        actor_id=current_user.id,
+        details={
+            "title": updated_runbook.title,
+            "service_name": updated_runbook.service_name,
+            "updated_fields": list(runbook_in.model_dump(exclude_unset=True).keys()),
+        },
+    )
+    return updated_runbook
 
 
 @router.post(
@@ -87,7 +113,20 @@ def create_runbook_chunk(
     runbook = runbook_service.get_runbook(db, runbook_id)
     if runbook is None:
         raise HTTPException(status_code=404, detail="Runbook not found")
-    return runbook_service.create_runbook_chunk(db, runbook, chunk_in)
+    chunk = runbook_service.create_runbook_chunk(db, runbook, chunk_in)
+    audit_log_service.safe_create_audit_log(
+        db,
+        entity_type="runbook_chunk",
+        entity_id=chunk.id,
+        action="created",
+        actor_id=current_user.id,
+        details={
+            "runbook_id": str(runbook.id),
+            "service_name": runbook.service_name,
+            "chunk_index": chunk.chunk_index,
+        },
+    )
+    return chunk
 
 
 @router.get("/{runbook_id}/chunks", response_model=list[RunbookChunkRead])
