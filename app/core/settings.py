@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
 
     # LLM (future support for OpenAI and Ollama)
+    llm_provider: str = "deterministic"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4"
 

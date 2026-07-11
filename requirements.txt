@@ -9,7 +9,7 @@ psycopg2-binary==2.9.9
 pgvector==0.2.4
 
 # Pydantic
-pydantic==2.5.0
+pydantic==2.7.4
 pydantic-settings==2.1.0
 
 # Auth

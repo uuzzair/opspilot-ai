@@ -27,4 +27,5 @@ class TriageState(TypedDict, total=False):
     suspected_cause: str
     recommended_actions: list[str]
     confidence_score: float
+    model_name: str
     retrieved_chunks: list[RetrievedChunk]

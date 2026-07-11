@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai.llm_provider import get_triage_provider
 from app.ai.triage_graph import FALLBACK_ACTIONS, classify_severity_from_text, run_triage_graph
 from app.ai.triage_state import RetrievedChunk, TriageState
 from app.db.models import Incident, TriageResult
@@ -20,6 +21,7 @@ def create_triage_result(db: Session, incident: Incident) -> TriageResult:
     graph_output = run_triage_graph(
         build_initial_triage_state(incident),
         lambda state: retrieve_runbook_chunks(db, state),
+        get_triage_provider(FALLBACK_ACTIONS),
     )
     severity = graph_output["severity"]
     incident.severity = severity
@@ -29,7 +31,7 @@ def create_triage_result(db: Session, incident: Incident) -> TriageResult:
         suspected_cause=graph_output["suspected_cause"],
         recommended_actions=graph_output["recommended_actions"],
         confidence_score=graph_output["confidence_score"],
-        model_name="langgraph-deterministic-v1",
+        model_name=graph_output["model_name"],
     )
     db.add(incident)
     db.add(triage_result)

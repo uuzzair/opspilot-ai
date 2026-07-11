@@ -3,6 +3,7 @@ from collections.abc import Callable
 
 from langgraph.graph import END, StateGraph
 
+from app.ai.llm_provider import DeterministicTriageProvider, TriageProvider
 from app.ai.triage_state import RetrievedChunk, TriageState
 
 FALLBACK_ACTIONS = [
@@ -30,13 +31,17 @@ def classify_severity_from_text(text: str) -> str:
     return "low"
 
 
-def build_triage_graph(retriever: Retriever):
+def build_triage_graph(retriever: Retriever, provider: TriageProvider | None = None):
     """Build the deterministic triage graph."""
+    triage_provider = provider or DeterministicTriageProvider(FALLBACK_ACTIONS)
     graph = StateGraph(TriageState)
     graph.add_node("normalize_incident", normalize_incident)
     graph.add_node("classify_severity", classify_severity)
     graph.add_node("retrieve_runbooks", lambda state: retrieve_runbooks(state, retriever))
-    graph.add_node("generate_recommendations", generate_recommendations)
+    graph.add_node(
+        "generate_recommendations",
+        lambda state: generate_recommendations(state, triage_provider),
+    )
     graph.add_node("validate_output", validate_output)
 
     graph.set_entry_point("normalize_incident")
@@ -48,9 +53,13 @@ def build_triage_graph(retriever: Retriever):
     return graph.compile()
 
 
-def run_triage_graph(state: TriageState, retriever: Retriever) -> TriageState:
+def run_triage_graph(
+    state: TriageState,
+    retriever: Retriever,
+    provider: TriageProvider | None = None,
+) -> TriageState:
     """Run the deterministic triage graph."""
-    graph = build_triage_graph(retriever)
+    graph = build_triage_graph(retriever, provider)
     return graph.invoke(state)
 
 
@@ -73,26 +82,22 @@ def retrieve_runbooks(state: TriageState, retriever: Retriever) -> TriageState:
     return {"retrieved_chunks": retriever(state)}
 
 
-def generate_recommendations(state: TriageState) -> TriageState:
-    """Generate deterministic output from incident and retrieved chunks."""
+def generate_recommendations(state: TriageState, provider: TriageProvider) -> TriageState:
+    """Generate structured output from the configured triage provider."""
     chunks = state.get("retrieved_chunks", [])
-    actions = [
-        chunk["chunk_text"].strip()
-        for chunk in chunks
-        if chunk["chunk_text"].strip()
-    ] or FALLBACK_ACTIONS
-    severity = state.get("severity", "low")
-    service = state.get("affected_service") or "an unspecified service"
-    chunks_found = bool(chunks)
+    generation = provider.generate_triage(
+        incident_text=state.get("query", ""),
+        retrieved_chunks=chunks,
+        severity=state.get("severity", "low"),
+        affected_service=state.get("affected_service"),
+        title=state.get("title"),
+    )
     return {
-        "summary": f"{severity.title()} incident for {service}: {state.get('title', '')}",
-        "suspected_cause": (
-            "Relevant runbook context was found for this incident."
-            if chunks_found
-            else f"No matching runbook context found; classified as {severity} from incident text."
-        ),
-        "recommended_actions": actions,
-        "confidence_score": 0.75 if chunks_found else 0.45,
+        "summary": generation.summary,
+        "suspected_cause": generation.suspected_cause,
+        "recommended_actions": generation.recommended_actions,
+        "confidence_score": generation.confidence_score,
+        "model_name": generation.model_name,
     }
 
 
@@ -105,4 +110,9 @@ def validate_output(state: TriageState) -> TriageState:
         raise ValueError("Triage graph did not produce a summary")
     if not state.get("recommended_actions"):
         raise ValueError("Triage graph did not produce recommended actions")
+    confidence_score = state.get("confidence_score")
+    if confidence_score is None or not 0 <= confidence_score <= 1:
+        raise ValueError("Triage graph produced an invalid confidence score")
+    if not state.get("model_name"):
+        raise ValueError("Triage graph did not produce a model name")
     return {}
