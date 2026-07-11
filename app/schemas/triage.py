@@ -1,8 +1,17 @@
 """Triage API schemas."""
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+ApprovalStatus = Literal["pending", "approved", "rejected"]
+
+
+class TriageReviewRequest(BaseModel):
+    """Request body for triage review actions."""
+
+    reviewer_notes: str | None = Field(default=None, max_length=5000)
 
 
 class TriageResultRead(BaseModel):
@@ -17,7 +26,8 @@ class TriageResultRead(BaseModel):
     recommended_actions: list[str]
     confidence_score: float | None
     model_name: str | None
-    approval_status: str
+    approval_status: ApprovalStatus
     approved_by_id: UUID | None
+    reviewer_notes: str | None
     created_at: datetime
     updated_at: datetime

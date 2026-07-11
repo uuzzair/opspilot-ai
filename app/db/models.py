@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, JSON, String, Text, Uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, JSON, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -117,6 +117,12 @@ class TriageResult(BaseModel):
     """AI triage result for an incident."""
 
     __tablename__ = "triage_results"
+    __table_args__ = (
+        CheckConstraint(
+            "approval_status IN ('pending', 'approved', 'rejected')",
+            name="ck_triage_results_approval_status",
+        ),
+    )
 
     incident_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -139,6 +145,7 @@ class TriageResult(BaseModel):
         ForeignKey("users.id"),
         nullable=True,
     )
+    reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     incident: Mapped[Incident] = relationship(back_populates="triage_results")
     approved_by: Mapped[User | None] = relationship()

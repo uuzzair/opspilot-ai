@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Incident, TriageResult
 from app.schemas.runbook import RunbookSearchRequest
+from app.schemas.triage import TriageReviewRequest
 from app.services import runbook_service
 
 FALLBACK_ACTIONS = [
@@ -20,6 +21,9 @@ SEVERITY_KEYWORDS = {
     "high": ["high latency", "p95", "error rate", "database cpu", "queue backlog"],
     "medium": ["degraded", "intermittent", "timeout"],
 }
+
+APPROVED_STATUS = "approved"
+REJECTED_STATUS = "rejected"
 
 
 def create_triage_result(db: Session, incident: Incident) -> TriageResult:
@@ -65,6 +69,60 @@ def list_triage_results(db: Session, incident_id: UUID) -> list[TriageResult]:
         .order_by(TriageResult.created_at.desc(), TriageResult.id.desc())
     )
     return list(result.scalars().all())
+
+
+def get_triage_result(db: Session, triage_id: UUID) -> TriageResult | None:
+    """Get a triage result by ID."""
+    return db.get(TriageResult, triage_id)
+
+
+def approve_triage_result(
+    db: Session,
+    triage_result: TriageResult,
+    reviewer_id: UUID,
+    review_in: TriageReviewRequest,
+) -> TriageResult:
+    """Approve a triage result."""
+    return review_triage_result(
+        db,
+        triage_result,
+        reviewer_id,
+        review_in,
+        APPROVED_STATUS,
+    )
+
+
+def reject_triage_result(
+    db: Session,
+    triage_result: TriageResult,
+    reviewer_id: UUID,
+    review_in: TriageReviewRequest,
+) -> TriageResult:
+    """Reject a triage result."""
+    return review_triage_result(
+        db,
+        triage_result,
+        reviewer_id,
+        review_in,
+        REJECTED_STATUS,
+    )
+
+
+def review_triage_result(
+    db: Session,
+    triage_result: TriageResult,
+    reviewer_id: UUID,
+    review_in: TriageReviewRequest,
+    approval_status: str,
+) -> TriageResult:
+    """Persist a human review decision for a triage result."""
+    triage_result.approval_status = approval_status
+    triage_result.approved_by_id = reviewer_id
+    triage_result.reviewer_notes = review_in.reviewer_notes
+    db.add(triage_result)
+    db.commit()
+    db.refresh(triage_result)
+    return triage_result
 
 
 def build_incident_query(incident: Incident) -> str:
