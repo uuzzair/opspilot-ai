@@ -1,299 +1,226 @@
-# OpsPilot AI - Production-Style Backend
+# OpsPilot AI
 
-A production-style backend for AI-powered incident triage built with FastAPI, PostgreSQL, Redis, and LangGraph.
+OpsPilot AI is a production-style backend for incident triage. It lets engineers create incidents, manage runbooks, retrieve relevant runbook chunks with local embeddings, generate structured triage through a LangGraph workflow, submit triage jobs to Celery, and require human approval before recommendations are accepted.
 
-## Phase 1: Core Infrastructure
+The project is backend-only. There is no frontend yet.
 
-This is Phase 1 implementation with foundational infrastructure:
-- FastAPI application with health check endpoints
-- PostgreSQL database with SQLAlchemy 2.0 ORM
-- Redis for caching and task queues (prepared for future Celery integration)
-- Alembic database migrations
-- Docker Compose for local development
-- Structured logging with JSON output
-- Pytest test suite
-- Environment-based configuration
+## Architecture Summary
 
-## Prerequisites
+- FastAPI exposes REST APIs under `/api`, with `/health` kept outside the API prefix.
+- SQLAlchemy 2.0 models persist users, incidents, runbooks, triage results, triage jobs, and audit logs.
+- PostgreSQL stores application data. pgvector stores runbook chunk embeddings.
+- Redis is used as the Celery broker and result backend.
+- Celery workers run long triage jobs outside request/response handling.
+- LangGraph orchestrates deterministic triage nodes and calls a pluggable triage provider.
+- The default provider is deterministic. Ollama can be enabled for local LLM output.
+- Audit logs record important state-changing actions.
 
-- **Python 3.11.8** (or higher)
-- **Docker Desktop** (for PostgreSQL and Redis)
-- **Git**
+More detail: [docs/architecture.md](docs/architecture.md).
 
-## Quick Start
+## Tech Stack
 
-### 1. Clone and Setup
+- Python 3.11
+- FastAPI
+- SQLAlchemy 2.0
+- Alembic
+- PostgreSQL + pgvector
+- Redis
+- Celery
+- LangGraph
+- Pydantic v2
+- sentence-transformers
+- Pytest
+- Docker Compose
 
-```bash
-# Clone the repository
-git clone <repository-url>
-cd opspilot-ai
+## Features
 
-# Create Python virtual environment
+- User registration, login, and `/api/auth/me`
+- JWT access tokens
+- Incident CRUD
+- Runbook CRUD and chunk management
+- Local embeddings for runbook chunks
+- Runbook semantic search
+- Synchronous incident triage
+- Asynchronous triage jobs with Celery
+- Deterministic triage fallback
+- Optional local Ollama triage provider
+- Human approval/rejection for triage results
+- Audit log listing and filtering
+- Docker Compose development stack
+
+## Local Setup
+
+Use Python 3.11.8 or newer.
+
+```powershell
 python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-
-# Install dependencies
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-### 2. Environment Configuration
+PostgreSQL and Redis are expected to run through Docker Compose, not local installs.
 
-```bash
-# Copy example environment file
-cp .env.example .env
+## Docker Setup
 
-# The .env file is configured for Docker Compose with defaults
+Start API, worker, PostgreSQL, and Redis:
+
+```powershell
+docker compose up --build
 ```
 
-### 3. Start Services with Docker Compose
+Run in the background:
 
-```bash
-# Start all services (API, PostgreSQL, Redis)
-docker-compose up -d
-
-# Verify services are running
-docker-compose ps
-
-# View logs
-docker-compose logs -f api
+```powershell
+docker compose up -d --build
 ```
 
-### 4. Initialize Database
+Check services:
 
-```bash
-# Create initial migration (first time only)
-alembic revision --autogenerate -m "Initial schema"
-
-# Apply migrations
-alembic upgrade head
-
-# Verify connection
-python -c "from app.db.session import engine; engine.execute('SELECT 1')"
+```powershell
+docker compose ps
+docker compose logs -f api
+docker compose logs -f worker
 ```
 
-### 5. Run the Application
+API docs:
 
-The API is automatically running via Docker Compose on `http://localhost:8000`
-
-```bash
-# Test health endpoint
-curl http://localhost:8000/health
-
-# OpenAPI documentation
-# Swagger UI: http://localhost:8000/docs
-# ReDoc: http://localhost:8000/redoc
-```
-
-## Running Tests Locally
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=app tests/
-
-# Run specific test file
-pytest tests/test_health.py -v
-```
-
-## Project Structure
-
-```
-opspilot-ai/
-├── app/
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI application factory
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── settings.py         # Pydantic settings (environment config)
-│   │   └── logging.py          # Structured logging setup
-│   ├── db/
-│   │   ├── __init__.py
-│   │   ├── session.py          # SQLAlchemy session and engine
-│   │   └── models.py           # ORM models (BaseModel)
-│   └── api/
-│       ├── __init__.py
-│       └── health.py           # Health check endpoints
-├── alembic/
-│   ├── env.py                  # Alembic environment config
-│   ├── script.py.mako          # Migration template
-│   └── versions/               # Migration files
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py             # Pytest fixtures
-│   └── test_health.py          # Health endpoint tests
-├── .env.example                # Example environment variables
-├── .env                        # Local environment (git-ignored)
-├── .gitignore                  # Git ignore rules
-├── Dockerfile                  # Multi-stage Docker build
-├── docker-compose.yml          # Docker Compose configuration
-├── requirements.txt            # Python dependencies
-├── pytest.ini                  # Pytest configuration
-├── PROJECT_SPEC.md             # Project specification
-└── README.md                   # This file
-```
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- Health: http://localhost:8000/health
 
 ## Environment Variables
 
-Key environment variables (see `.env.example`):
+Use `.env.example` as the safe template. Keep real `.env` values private.
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `DEBUG` | `false` | Enable debug mode |
-| `DATABASE_URL` | `postgresql://opspilot:opspilot@localhost:5432/opspilot_db` | PostgreSQL connection string |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local LLM endpoint (future) |
-| `OPENAI_API_KEY` | Empty | OpenAI API key (future) |
-| `USE_LOCAL_LLM` | `true` | Use local Ollama by default |
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | SQLAlchemy database URL |
+| `REDIS_URL` | Redis broker/result URL for Celery |
+| `JWT_SECRET_KEY` | JWT signing secret |
+| `JWT_ALGORITHM` | JWT algorithm, default `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime |
+| `LLM_PROVIDER` | `deterministic` or `ollama` |
+| `OLLAMA_BASE_URL` | Ollama HTTP endpoint |
+| `OLLAMA_MODEL` | Local Ollama model, for example `qwen3:4b` |
+| `OLLAMA_TIMEOUT_SECONDS` | Timeout for local Ollama generation |
+| `OPENAI_API_KEY` | Reserved for future OpenAI support |
+| `OPENAI_MODEL` | Reserved for future OpenAI support |
+| `EMBEDDING_MODEL_NAME` | sentence-transformers model |
 
-## Available Endpoints
+ChatGPT Plus is separate from OpenAI API billing and API keys. This project does not require an OpenAI API key. Local Ollama can be used instead by setting:
 
-### Health Checks
-- `GET /health` - Basic health check
-
-### API Documentation
-- `GET /docs` - Swagger UI
-- `GET /redoc` - ReDoc documentation
-- `GET /openapi.json` - OpenAPI schema
-
-## Development Workflow
-
-### Making Database Schema Changes
-
-```bash
-# Create a new migration
-alembic revision --autogenerate -m "Add users table"
-
-# Review the generated migration in alembic/versions/
-
-# Apply the migration
-alembic upgrade head
-
-# Roll back if needed
-alembic downgrade -1
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+OLLAMA_MODEL=qwen3:4b
+OLLAMA_TIMEOUT_SECONDS=90
 ```
 
-### Adding New Endpoints
+Use `http://host.docker.internal:11434` when the API runs in Docker and Ollama runs on your host machine.
 
-1. Create route handlers in `app/api/` 
-2. Add Pydantic schemas as needed
-3. Import and register routers in `app/main.py`
-4. Write tests in `tests/`
-5. Update this README
+## Database Migrations
 
-### Debugging
+Apply migrations:
 
-```bash
-# View database logs
-docker-compose logs -f postgres
-
-# View Redis logs
-docker-compose logs -f redis
-
-# View API logs with full output
-docker-compose logs -f api
-
-# Access PostgreSQL shell
-docker-compose exec postgres psql -U opspilot -d opspilot_db
-
-# Access Redis shell
-docker-compose exec redis redis-cli
+```powershell
+.\venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-## Stopping Services
+Create a migration after model changes:
 
-```bash
-# Stop all services (keep volumes)
-docker-compose stop
-
-# Stop and remove containers (keep volumes)
-docker-compose down
-
-# Stop and remove everything including volumes
-docker-compose down -v
+```powershell
+.\venv\Scripts\python.exe -m alembic revision --autogenerate -m "Describe change"
 ```
 
-## Production Deployment
+For Docker PostgreSQL from the host:
 
-For production deployment:
-
-1. Build production Docker image:
-   ```bash
-   docker build --target production -t opspilot-ai:latest .
-   ```
-
-2. Set production environment variables
-
-3. Use a production database (managed PostgreSQL)
-
-4. Use environment-based secrets management
-
-5. Configure reverse proxy (nginx/Traefik)
-
-6. Set up monitoring and logging aggregation
-
-## Future Phases
-
-- **Phase 2**: User, Incident, and Runbook models with CRUD APIs
-- **Phase 3**: LangGraph triage workflow with LLM integration
-- **Phase 4**: Celery background jobs for async triage
-- **Phase 5**: Comprehensive tests and CI/CD pipeline
-
-## Contributing
-
-Follow these guidelines:
-- Keep business logic in services, not route handlers
-- Use Pydantic schemas for API boundaries
-- Write tests for all new endpoints
-- Use structured JSON logging
-- Ensure type hints on all functions
-
-## Troubleshooting
-
-### PostgreSQL Connection Issues
-```bash
-# Verify PostgreSQL is running
-docker-compose ps postgres
-
-# Check PostgreSQL logs
-docker-compose logs postgres
-
-# Restart PostgreSQL
-docker-compose restart postgres
+```powershell
+$env:DATABASE_URL='postgresql://opspilot:opspilot@localhost:5432/opspilot_db'
+.\venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-### Redis Connection Issues
-```bash
-# Verify Redis is running
-docker-compose ps redis
+## Test Commands
 
-# Check Redis logs
-docker-compose logs redis
-
-# Restart Redis
-docker-compose restart redis
+```powershell
+.\venv\Scripts\python.exe -m pytest
+.\venv\Scripts\python.exe -m ruff check app tests
+docker compose config --quiet
+.\venv\Scripts\python.exe -m pip check
 ```
 
-### Port Already in Use
-```bash
-# Find process using port 8000
-lsof -i :8000  # macOS/Linux
-netstat -ano | findstr :8000  # Windows
+## Windows Helper Script
 
-# Kill the process or change port in docker-compose.yml
+Common commands are available in `scripts/dev.ps1`:
+
+```powershell
+.\scripts\dev.ps1 test
+.\scripts\dev.ps1 lint
+.\scripts\dev.ps1 compose-check
+.\scripts\dev.ps1 migrate
 ```
+
+## Sample API Flow
+
+Detailed curl examples are in [docs/api-examples.md](docs/api-examples.md).
+
+Short flow:
+
+1. Register: `POST /api/auth/register`
+2. Login: `POST /api/auth/login`
+3. Create an incident: `POST /api/incidents`
+4. Create a runbook: `POST /api/runbooks`
+5. Add runbook chunks: `POST /api/runbooks/{runbook_id}/chunks`
+6. Run synchronous triage: `POST /api/incidents/{incident_id}/triage`
+7. Approve or reject triage: `POST /api/triage/{triage_id}/approve`
+8. View audit logs: `GET /api/audit-logs`
+
+## Async Triage Job Flow
+
+Create a job:
+
+```powershell
+curl -X POST http://localhost:8000/api/incidents/INCIDENT_ID/triage-jobs `
+  -H "Authorization: Bearer TOKEN"
+```
+
+Poll status:
+
+```powershell
+curl http://localhost:8000/api/triage-jobs/JOB_ID `
+  -H "Authorization: Bearer TOKEN"
+```
+
+The POST returns immediately with `202 Accepted`. The Celery worker creates the triage result later and updates the job to `succeeded` or `failed`.
+
+## Sample Data
+
+- `samples/runbooks/payments-api-latency.md`
+- `samples/incidents/payments-api-latency.json`
+
+These are human-readable examples for manual testing.
+
+## Security And Production Notes
+
+- Do not commit `.env`.
+- Replace `JWT_SECRET_KEY` before real deployment.
+- Store secrets in a real secret manager in production.
+- Keep PostgreSQL and Redis private to the application network.
+- Audit logs intentionally store metadata only, not passwords, JWTs, full incident descriptions, or full runbook chunk text.
+- LLM output is validated with Pydantic before persistence.
+- Human approval exists because generated triage is advisory and should not be treated as an accepted remediation plan without review.
+- Async triage jobs are not idempotent yet. If a worker crashes after creating a triage result but before updating the job, an orphaned result may exist.
+
+## CI
+
+GitHub Actions workflow lives at `.github/workflows/ci.yml` and runs:
+
+- dependency install
+- tests
+- ruff lint
+- Docker Compose config validation
 
 ## License
 
 Proprietary - OpsPilot AI
-
-## Support
-
-For issues and questions, please refer to the PROJECT_SPEC.md file.

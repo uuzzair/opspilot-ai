@@ -1,0 +1,6 @@
+{
+  "title": "Payments API high latency",
+  "description": "p95 latency is high for checkout requests. Customers are seeing slower payment confirmation.",
+  "affected_service": "payments-api",
+  "source": "manual"
+}

@@ -10,9 +10,9 @@ from sqlalchemy.pool import StaticPool
 
 os.environ["LLM_PROVIDER"] = "deterministic"
 
-from app.main import app
-from app.db.models import Base
-from app.db.session import get_db
+from app.main import app  # noqa: E402
+from app.db.models import Base  # noqa: E402
+from app.db.session import get_db  # noqa: E402
 
 
 engine = create_engine(
