@@ -9,9 +9,11 @@ from urllib import error, request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.ai.triage_state import RetrievedChunk
+from app.core.logging import get_logger
 from app.core.settings import get_settings
 
 DETERMINISTIC_MODEL_NAME = "langgraph-deterministic-v1"
+logger = get_logger(__name__)
 
 
 class TriageGeneration(BaseModel):
@@ -27,6 +29,8 @@ class TriageGeneration(BaseModel):
 
 class TriageProviderResult(TriageGeneration):
     """Provider output plus trusted provider metadata."""
+
+    model_config = ConfigDict(protected_namespaces=())
 
     model_name: str
 
@@ -101,8 +105,7 @@ class OllamaTriageProvider:
     @property
     def model_name(self) -> str:
         """Trusted model label for persisted triage results."""
-        normalized = self.model.replace("/", "-").replace(":", "-")
-        return f"langgraph-ollama-{normalized}"
+        return f"langgraph-ollama-{self.model}"
 
     def generate_triage(
         self,
@@ -125,7 +128,16 @@ class OllamaTriageProvider:
                 **generation.model_dump(),
                 model_name=self.model_name,
             )
-        except (OSError, ValueError, ValidationError, error.URLError, error.HTTPError, json.JSONDecodeError):
+        except (OSError, ValueError, ValidationError, error.URLError, error.HTTPError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "Ollama triage generation failed; falling back to deterministic provider",
+                extra={
+                    "provider": "ollama",
+                    "model": self.model,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
             return self.fallback_provider.generate_triage(
                 incident_text=incident_text,
                 retrieved_chunks=retrieved_chunks,
@@ -165,7 +177,7 @@ class OllamaTriageProvider:
         with request.urlopen(req, timeout=self.timeout_seconds) as response:
             raw_body = response.read().decode("utf-8")
         envelope = json.loads(raw_body)
-        raw_generation: Any = envelope.get("response")
+        raw_generation: Any = envelope.get("response") or envelope.get("thinking")
         if isinstance(raw_generation, str):
             return TriageGeneration.model_validate_json(raw_generation)
         if isinstance(raw_generation, dict):
@@ -212,5 +224,6 @@ def get_triage_provider(
             base_url=settings.ollama_base_url,
             model=settings.ollama_model,
             fallback_provider=deterministic,
+            timeout_seconds=settings.ollama_timeout_seconds,
         )
     return deterministic

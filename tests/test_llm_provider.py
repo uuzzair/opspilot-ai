@@ -83,7 +83,7 @@ def test_ollama_provider_parses_valid_mocked_structured_json(monkeypatch) -> Non
     monkeypatch.setattr("app.ai.llm_provider.request.urlopen", mock_urlopen)
     provider = OllamaTriageProvider(
         base_url="http://ollama.local",
-        model="llama3.1",
+        model="qwen3:4b",
         fallback_provider=deterministic_provider(),
     )
 
@@ -98,7 +98,43 @@ def test_ollama_provider_parses_valid_mocked_structured_json(monkeypatch) -> Non
     assert result.summary == "High incident for payments-api."
     assert result.recommended_actions == ["Check upstream dependency health."]
     assert result.confidence_score == 0.82
-    assert result.model_name == "langgraph-ollama-llama3.1"
+    assert result.model_name == "langgraph-ollama-qwen3:4b"
+
+
+def test_ollama_provider_parses_qwen_thinking_json(monkeypatch) -> None:
+    """Ollama provider validates qwen-style JSON from the thinking field."""
+    payload = {
+        "response": "",
+        "thinking": json.dumps(
+            {
+                "summary": "High incident for payments-api.",
+                "suspected_cause": None,
+                "recommended_actions": ["Review latency dashboards."],
+                "confidence_score": 0.7,
+            }
+        ),
+    }
+
+    def mock_urlopen(req, timeout):
+        return MockHTTPResponse(payload)
+
+    monkeypatch.setattr("app.ai.llm_provider.request.urlopen", mock_urlopen)
+    provider = OllamaTriageProvider(
+        base_url="http://ollama.local",
+        model="qwen3:4b",
+        fallback_provider=deterministic_provider(),
+    )
+
+    result = provider.generate_triage(
+        incident_text="High latency on payments",
+        retrieved_chunks=[],
+        severity="high",
+        affected_service="payments-api",
+        title="High latency on payments",
+    )
+
+    assert result.model_name == "langgraph-ollama-qwen3:4b"
+    assert result.recommended_actions == ["Review latency dashboards."]
 
 
 def test_ollama_provider_falls_back_on_invalid_json(monkeypatch) -> None:
