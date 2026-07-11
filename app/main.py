@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.settings import get_settings
 from app.core.logging import setup_logging, get_logger
+from app.core.middleware import RequestIDMiddleware
 from app.api.auth import router as auth_router
 from app.api.audit_logs import router as audit_logs_router
 from app.api.health import router as health_router
@@ -38,6 +39,8 @@ def create_app() -> FastAPI:
         debug=settings.debug,
         lifespan=lifespan,
     )
+
+    app.add_middleware(RequestIDMiddleware)
 
     # CORS middleware
     app.add_middleware(

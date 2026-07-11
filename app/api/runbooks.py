@@ -1,7 +1,7 @@
 """Runbook routes."""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -45,9 +45,13 @@ def create_runbook(
 
 
 @router.get("", response_model=list[RunbookRead])
-def list_runbooks(db: Session = Depends(get_db)) -> list[Runbook]:
+def list_runbooks(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[Runbook]:
     """List runbooks."""
-    return runbook_service.list_runbooks(db)
+    return runbook_service.list_runbooks(db, limit=limit, offset=offset)
 
 
 @router.post("/search", response_model=list[RunbookChunkSearchResult])

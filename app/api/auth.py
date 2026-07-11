@@ -1,5 +1,5 @@
 """Authentication routes."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -9,6 +9,7 @@ from app.schemas.auth import TokenRead, UserLogin, UserRegister
 from app.schemas.user import CurrentUserRead, UserRead
 from app.services import audit_log_service
 from app.services import auth_service
+from app.services.rate_limit_service import RateLimitExceeded, check_auth_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -16,9 +17,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def register_user(
     user_in: UserRegister,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> User:
     """Register a user."""
+    check_rate_limit_or_raise(request, "register")
     existing_user = auth_service.get_user_by_email(db, user_in.email)
     if existing_user is not None:
         raise HTTPException(status_code=409, detail="Email already registered")
@@ -37,9 +40,11 @@ def register_user(
 @router.post("/login", response_model=TokenRead)
 def login_user(
     user_in: UserLogin,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> TokenRead:
     """Login and return a bearer token."""
+    check_rate_limit_or_raise(request, "login")
     user = auth_service.authenticate_user(db, user_in.email, user_in.password)
     if user is None:
         raise HTTPException(
@@ -54,3 +59,15 @@ def login_user(
 def read_current_user(current_user: User = Depends(get_current_user)) -> User:
     """Return the current user."""
     return current_user
+
+
+def check_rate_limit_or_raise(request: Request, action: str) -> None:
+    """Apply auth rate limit for a request."""
+    client_host = request.client.host if request.client else "unknown"
+    try:
+        check_auth_rate_limit(client_host, action)
+    except RateLimitExceeded:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests",
+        )

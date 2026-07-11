@@ -20,6 +20,7 @@ def list_audit_logs(
     actor_id: UUID | None = None,
     action: str | None = None,
     limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[AuditLog]:
@@ -31,4 +32,5 @@ def list_audit_logs(
         actor_id=actor_id,
         action=action,
         limit=limit,
+        offset=offset,
     )

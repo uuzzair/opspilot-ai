@@ -6,6 +6,13 @@ Base URL:
 http://localhost:8000
 ```
 
+Every response includes `X-Request-ID`. You can pass your own:
+
+```powershell
+curl http://localhost:8000/health `
+  -H "X-Request-ID: local-debug-123"
+```
+
 Set these placeholders as you go:
 
 ```powershell
@@ -48,6 +55,12 @@ curl -X POST http://localhost:8000/api/incidents `
   -d "{\"title\":\"Payments API high latency\",\"description\":\"p95 latency is high for checkout requests.\",\"affected_service\":\"payments-api\"}"
 ```
 
+List incidents with pagination:
+
+```powershell
+curl "http://localhost:8000/api/incidents?limit=50&offset=0"
+```
+
 ## Create Runbook
 
 ```powershell
@@ -55,6 +68,12 @@ curl -X POST http://localhost:8000/api/runbooks `
   -H "Content-Type: application/json" `
   -H "Authorization: Bearer $TOKEN" `
   -d "{\"title\":\"Payments API Latency Runbook\",\"service_name\":\"payments-api\",\"description\":\"Steps for investigating checkout latency.\"}"
+```
+
+List runbooks with pagination:
+
+```powershell
+curl "http://localhost:8000/api/runbooks?limit=50&offset=0"
 ```
 
 ## Add Runbook Chunk
@@ -140,3 +159,4 @@ Supported filters:
 - `actor_id`
 - `action`
 - `limit`
+- `offset`

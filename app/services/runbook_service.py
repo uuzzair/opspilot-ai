@@ -30,9 +30,14 @@ def create_runbook(
     return runbook
 
 
-def list_runbooks(db: Session) -> list[Runbook]:
+def list_runbooks(db: Session, limit: int = 50, offset: int = 0) -> list[Runbook]:
     """List runbooks ordered by creation time."""
-    result = db.execute(select(Runbook).order_by(Runbook.created_at.desc()))
+    result = db.execute(
+        select(Runbook)
+        .order_by(Runbook.created_at.desc(), Runbook.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     return list(result.scalars().all())
 
 

@@ -165,6 +165,8 @@ Common commands are available in `scripts/dev.ps1`:
 
 Detailed curl examples are in [docs/api-examples.md](docs/api-examples.md).
 
+All responses include an `X-Request-ID` header. You may send your own `X-Request-ID`; otherwise the API generates one.
+
 Short flow:
 
 1. Register: `POST /api/auth/register`
@@ -207,6 +209,8 @@ These are human-readable examples for manual testing.
 - Replace `JWT_SECRET_KEY` before real deployment.
 - Store secrets in a real secret manager in production.
 - Keep PostgreSQL and Redis private to the application network.
+- Auth register/login endpoints have simple Redis-backed rate limiting with safe fallback if Redis is unavailable.
+- List endpoints use `limit` and `offset` pagination where applicable.
 - Audit logs intentionally store metadata only, not passwords, JWTs, full incident descriptions, or full runbook chunk text.
 - LLM output is validated with Pydantic before persistence.
 - Human approval exists because generated triage is advisory and should not be treated as an accepted remediation plan without review.

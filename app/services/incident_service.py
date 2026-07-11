@@ -21,9 +21,14 @@ def create_incident(
     return incident
 
 
-def list_incidents(db: Session) -> list[Incident]:
+def list_incidents(db: Session, limit: int = 50, offset: int = 0) -> list[Incident]:
     """List incidents ordered by creation time."""
-    result = db.execute(select(Incident).order_by(Incident.created_at.desc()))
+    result = db.execute(
+        select(Incident)
+        .order_by(Incident.created_at.desc(), Incident.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     return list(result.scalars().all())
 
 

@@ -71,6 +71,7 @@ def list_audit_logs(
     actor_id: UUID | None = None,
     action: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[AuditLog]:
     """List audit logs newest first with optional filters."""
     statement = select(AuditLog)
@@ -83,5 +84,10 @@ def list_audit_logs(
     if action is not None:
         statement = statement.where(AuditLog.action == action)
 
-    statement = statement.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(limit)
+    statement = (
+        statement
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     return list(db.execute(statement).scalars().all())

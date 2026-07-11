@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 os.environ["LLM_PROVIDER"] = "deterministic"
+os.environ["AUTH_RATE_LIMIT_ENABLED"] = "false"
 
 from app.main import app  # noqa: E402
 from app.db.models import Base  # noqa: E402

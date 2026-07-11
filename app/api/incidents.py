@@ -1,7 +1,7 @@
 """Incident routes."""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -44,9 +44,13 @@ def create_incident(
 
 
 @router.get("", response_model=list[IncidentRead])
-def list_incidents(db: Session = Depends(get_db)) -> list[Incident]:
+def list_incidents(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[Incident]:
     """List incidents."""
-    return incident_service.list_incidents(db)
+    return incident_service.list_incidents(db, limit=limit, offset=offset)
 
 
 @router.get("/{incident_id}", response_model=IncidentRead)
