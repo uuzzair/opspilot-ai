@@ -23,6 +23,28 @@ services:
     networks:
       - opspilot
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
+    networks:
+      - opspilot
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:

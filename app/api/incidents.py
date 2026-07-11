@@ -9,8 +9,11 @@ from app.db.models import Incident, TriageResult, User
 from app.db.session import get_db
 from app.schemas.incident import IncidentCreate, IncidentRead, IncidentUpdate
 from app.schemas.triage import TriageResultRead
+from app.schemas.triage_job import TriageJobRead
 from app.services import incident_service
+from app.services import triage_job_service
 from app.services import triage_service
+from app.workers.tasks import process_triage_job
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
@@ -80,3 +83,22 @@ def list_incident_triage(
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     return triage_service.list_triage_results(db, incident_id)
+
+
+@router.post(
+    "/{incident_id}/triage-jobs",
+    response_model=TriageJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def create_incident_triage_job(
+    incident_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Queue asynchronous triage for an incident."""
+    incident = incident_service.get_incident(db, incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    job = triage_job_service.create_triage_job(db, incident, current_user.id)
+    async_result = process_triage_job.delay(str(job.id))
+    return triage_job_service.set_celery_task_id(db, job, async_result.id)

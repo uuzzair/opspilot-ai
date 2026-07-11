@@ -1,11 +1,14 @@
 """Pytest configuration and fixtures."""
 from collections.abc import Iterator
+import os
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
+os.environ["LLM_PROVIDER"] = "deterministic"
 
 from app.main import app
 from app.db.models import Base

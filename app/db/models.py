@@ -151,6 +151,46 @@ class TriageResult(BaseModel):
     approved_by: Mapped[User | None] = relationship()
 
 
+class TriageJob(BaseModel):
+    """Asynchronous triage job."""
+
+    __tablename__ = "triage_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'succeeded', 'failed')",
+            name="ck_triage_jobs_status",
+        ),
+    )
+
+    incident_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("incidents.id"),
+        nullable=False,
+    )
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(30),
+        default="pending",
+        server_default="pending",
+        nullable=False,
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    triage_result_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("triage_results.id"),
+        nullable=True,
+    )
+    requested_by_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    incident: Mapped[Incident] = relationship()
+    triage_result: Mapped[TriageResult | None] = relationship()
+    requested_by: Mapped[User | None] = relationship()
+
+
 class AuditLog(Base):
     """Audit log entry."""
 

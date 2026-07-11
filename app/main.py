@@ -12,6 +12,7 @@ from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
 from app.api.runbooks import router as runbooks_router
 from app.api.triage import router as triage_router
+from app.api.triage_jobs import router as triage_jobs_router
 
 # Setup logging
 settings = get_settings()
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(incidents_router, prefix="/api")
     app.include_router(runbooks_router, prefix="/api")
     app.include_router(triage_router, prefix="/api")
+    app.include_router(triage_jobs_router, prefix="/api")
 
     return app
 
