@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Incident, User
+from app.db.models import Incident, TriageResult, User
 from app.db.session import get_db
 from app.schemas.incident import IncidentCreate, IncidentRead, IncidentUpdate
+from app.schemas.triage import TriageResultRead
 from app.services import incident_service
+from app.services import triage_service
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
@@ -53,3 +55,28 @@ def update_incident(
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident_service.update_incident(db, incident, incident_in)
+
+
+@router.post("/{incident_id}/triage", response_model=TriageResultRead, status_code=status.HTTP_201_CREATED)
+def create_incident_triage(
+    incident_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TriageResult:
+    """Create deterministic triage for an incident."""
+    incident = incident_service.get_incident(db, incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return triage_service.create_triage_result(db, incident)
+
+
+@router.get("/{incident_id}/triage", response_model=list[TriageResultRead])
+def list_incident_triage(
+    incident_id: UUID,
+    db: Session = Depends(get_db),
+) -> list[TriageResult]:
+    """List triage results for an incident."""
+    incident = incident_service.get_incident(db, incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return triage_service.list_triage_results(db, incident_id)
